@@ -402,6 +402,10 @@ void print_usage() {
          "                    means -object\n"
          "                    memory-backend-memfd,id=mem,size=<N>,share=on together\n"
          "                    with -machine memory-backend=mem.\n"
+         "  --gap-report <path>\n"
+         "                    Write a machine-readable JSON gap report to <path> on\n"
+         "                    shutdown.  Pass - to write to stdout.  Only meaningful\n"
+         "                    with --vfio-socket (ignored otherwise).\n"
          "  --version, -v     Print version and exit\n"
          "  --help, -h        Print this help and exit\n";
 }
@@ -413,6 +417,7 @@ int main(int argc, char *argv[]) {
 
   const char *config_path = nullptr;
   const char *vfio_socket = nullptr;
+  [[maybe_unused]] const char *gap_report = nullptr;
   bool daemon_mode = false;
   bool attach_mode = false;
   int separator_idx = -1;
@@ -426,6 +431,9 @@ int main(int argc, char *argv[]) {
     if (arg == "--config" && i + 1 < argc) {
       config_path = argv[++i];
     } else if (arg == "--vfio-socket" && i + 1 < argc) {
+      vfio_socket = argv[++i];
+    } else if (arg == "--gap-report" && i + 1 < argc) {
+      gap_report = argv[++i];
       vfio_socket = argv[++i];
     } else if (arg == "--daemon") {
       daemon_mode = true;
@@ -465,7 +473,7 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 #if defined(RJ_ENABLE_VFIO_USER)
-    return rocjitsu::run_vfio_server(abs_config, vfio_socket);
+    return rocjitsu::run_vfio_server(abs_config, vfio_socket, gap_report ? gap_report : "");
 #else
     std::cerr << "rocjitsu: this build has no vfio-user support; reconfigure with "
                  "-DROCJITSU_ENABLE_VFIO=ON\n";
