@@ -19,6 +19,8 @@
 #include <ctime>
 #include <exception>
 #include <format>
+#include <fstream>
+#include <iostream>
 #include <stop_token>
 #include <thread>
 
@@ -73,7 +75,8 @@ ServerSignalAction action_for_signal(int signal) {
   return ServerSignalAction::KeepServing;
 }
 
-int run_vfio_server(const std::string &config_path, const std::string &socket_path) {
+int run_vfio_server(const std::string &config_path, const std::string &socket_path,
+                    const std::string &gap_report_path) {
   config::DeviceIdentityConfig identity;
   try {
     identity = config::load_device_identity(config_path, kEmbeddedSchema);
@@ -211,6 +214,31 @@ int run_vfio_server(const std::string &config_path, const std::string &socket_pa
   if (!report.empty()) {
     util::Logger::warn(report);
   }
+
+  // --- Machine-readable gap report ---
+  // Written after the human-readable report so the two end up adjacent in any
+  // log that captures stderr. The file is opened, written, and closed
+  // atomically from the perspective of a consumer reading after the process
+  // exits: it either exists and is complete, or does not exist.
+  if (!gap_report_path.empty()) {
+    const std::string json = trace.gap_report_json();
+    if (gap_report_path == "-") {
+      std::cout << json;
+    } else {
+      std::ofstream out(gap_report_path, std::ios::out | std::ios::trunc);
+      if (out) {
+        out << json;
+        if (!out.flush()) {
+          util::Logger::warn(
+              std::format("vfu: failed to flush gap report to {}", gap_report_path));
+        }
+      } else {
+        util::Logger::warn(
+            std::format("vfu: cannot open gap report file: {}", gap_report_path));
+      }
+    }
+  }
+
   return status;
 }
 

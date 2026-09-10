@@ -91,6 +91,42 @@ public:
   /// @details One episode of spinning warns once, however long it lasts.
   [[nodiscard]] uint64_t spin_warnings() const;
 
+  /// @brief Render a machine-readable JSON gap report.
+  ///
+  /// @details The report is the structured, machine-readable counterpart to the
+  /// human-readable @ref unmodeled_report() and @ref rejected_report().  It is
+  /// intended to be consumed by automation (the harness, a Hermes bot) to
+  /// identify the next gap to close.
+  ///
+  /// Schema (all arrays are sorted most-frequent-first):
+  /// @code{.json}
+  /// {
+  ///   "schema_version": 1,
+  ///   "unmodeled_registers": [
+  ///     { "bar": 5, "offset_hex": "0x00028a04", "width": 4,
+  ///       "reads": 1, "writes": 0, "name": "" }
+  ///   ],
+  ///   "rejected_accesses": [
+  ///     { "bar": 5, "offset_hex": "0x00028a04", "width": 4,
+  ///       "reads": 0, "writes": 1 }
+  ///   ],
+  ///   "spin_warnings": 0
+  /// }
+  /// @endcode
+  /// @returns A JSON string (always valid, never empty).
+  [[nodiscard]] std::string gap_report_json() const;
+
+  /// @brief Snapshot of one register access site for JSON serialisation.
+  /// @details Exported so the file-scope helper in the implementation can
+  /// accept a map of these by value without seeing the private @c Site type.
+  struct SiteForJson {
+    uint64_t reads = 0;
+    uint64_t writes = 0;
+    int bar = 0;
+    uint64_t offset = 0;
+    std::size_t width = 0;
+  };
+
 private:
   struct Site {
     uint64_t reads = 0;
