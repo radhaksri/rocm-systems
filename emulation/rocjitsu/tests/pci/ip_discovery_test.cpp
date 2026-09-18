@@ -377,4 +377,230 @@ TEST(IpDiscoveryProfile, AdvertisesTheRequestedGraphicsInstances) {
   EXPECT_TRUE(rocjitsu::validate_ip_discovery_table(build(spec)).valid);
 }
 
+// The gfx942 (MI300X / MI325X, CDNA3) profile must produce a table the
+// amdgpu/KFD driver will accept and must advertise exactly the IP blocks it is
+// documented to report, at the version numbers that route correctly into the
+// driver's switch tables.
+//
+// Base addresses are from aldebaran_ip_offset.h (GC 9.4.2), the nearest static
+// IP-offset header for this SOC15/CDNA3 family. They are annotated
+// "needs-calibration" and will be updated when sysfs dumps from real gfx942
+// hardware are available.
+TEST(IpDiscoveryProfile, Gfx942ProducesAValidTable) {
+  const rocjitsu::IpDiscoverySpec spec = rocjitsu::gfx942_discovery_spec();
+  const std::vector<std::byte> table = build(spec);
+  EXPECT_TRUE(rocjitsu::validate_ip_discovery_table(table).valid);
+}
+
+TEST(IpDiscoveryProfile, Gfx942HasAGcBlock) {
+  const rocjitsu::IpDiscoverySpec spec = rocjitsu::gfx942_discovery_spec();
+  bool has_gc = false;
+  for (const rocjitsu::IpBlock &block : spec.blocks) {
+    if (block.hardware_id == rocjitsu::IpHardwareId::Gc) {
+      has_gc = true;
+      EXPECT_EQ(block.major, 9u);
+      EXPECT_EQ(block.minor, 4u);
+      EXPECT_EQ(block.revision, 3u);
+    }
+  }
+  EXPECT_TRUE(has_gc) << "gfx942 profile must include at least one GC block";
+}
+
+// The default topology advertises one XCD. More XCDs require per-instance
+// register-base data and XCP partition management, which are not yet modelled.
+TEST(IpDiscoveryProfile, Gfx942DefaultsToOneGraphicsInstance) {
+  const rocjitsu::IpDiscoverySpec spec = rocjitsu::gfx942_discovery_spec();
+  int graphics = 0;
+  for (const rocjitsu::IpBlock &block : spec.blocks) {
+    if (block.hardware_id == rocjitsu::IpHardwareId::Gc) {
+      ++graphics;
+    }
+  }
+  EXPECT_EQ(graphics, 1);
+}
+
+TEST(IpDiscoveryProfile, Gfx942AdvertisesTheRequestedGraphicsInstances) {
+  const rocjitsu::IpDiscoverySpec spec =
+      rocjitsu::gfx942_discovery_spec({.graphics_instances = 3});
+  int graphics = 0;
+  for (const rocjitsu::IpBlock &block : spec.blocks) {
+    if (block.hardware_id == rocjitsu::IpHardwareId::Gc) {
+      ++graphics;
+    }
+  }
+  EXPECT_EQ(graphics, 3);
+  EXPECT_TRUE(rocjitsu::validate_ip_discovery_table(build(spec)).valid);
+}
+
+// The contract test for gfx942: all blocks, their exact versions, and their
+// segment bases. Any change here is a driver-visible behaviour change.
+//
+// These bases are transcribed from aldebaran_ip_offset.h (GC 9.4.2).
+// The "needs-calibration" blocks require sysfs dump verification against real
+// gfx942 (Aqua Vanjaram / MI300X / MI325X) hardware.
+TEST(IpDiscoveryProfile, Gfx942BlockListMatchesContract) {
+  // Default topology (1 GC instance).
+  const std::vector<rocjitsu::IpBlock> &blocks = rocjitsu::gfx942_discovery_spec().blocks;
+
+  struct Expected {
+    rocjitsu::IpHardwareId id;
+    uint8_t instance;
+    uint16_t major;
+    uint16_t minor;
+    uint16_t revision;
+    std::vector<uint64_t> bases;
+  };
+  const std::vector<Expected> contract = {
+      // GC 9.4.3: Aqua Vanjaram graphics compute (needs-calibration).
+      {rocjitsu::IpHardwareId::Gc, 0, 9, 4, 3,
+       {0x00002000, 0x0000A000, 0x02402C00}},
+      // MP0 11.0 (KSP / PSP; needs-calibration).
+      {rocjitsu::IpHardwareId::Mp0, 0, 11, 0, 0,
+       {0x00016000, 0x00DC0000, 0x00E00000, 0x00E40000, 0x0243FC00}},
+      // MP1 13.0 (SMU; needs-calibration).
+      {rocjitsu::IpHardwareId::Mp1, 0, 13, 0, 0,
+       {0x00016000, 0x00DC0000, 0x00E00000, 0x00E40000, 0x0243FC00}},
+      // OSSSYS 4.4 (needs-calibration).
+      {rocjitsu::IpHardwareId::OssSys, 0, 4, 4, 0,
+       {0x000010A0, 0x0240A000}},
+      // NBIF 7.9 (needs-calibration; segment 0 is 0 by construction).
+      {rocjitsu::IpHardwareId::Nbif, 0, 7, 9, 0,
+       {0x00000000, 0x00000014, 0x00000D20, 0x00010400, 0x0241B000, 0x04040000}},
+      // HDP 6.2 (needs-calibration).
+      {rocjitsu::IpHardwareId::Hdp, 0, 6, 2, 0,
+       {0x00000F20, 0x0240A400}},
+      // MMHUB 1.8 (needs-calibration).
+      {rocjitsu::IpHardwareId::MmHub, 0, 1, 8, 0,
+       {0x0001A000, 0x02408800}},
+      // ATHUB 1.8 (needs-calibration).
+      {rocjitsu::IpHardwareId::AtHub, 0, 1, 8, 0,
+       {0x00000C20, 0x02408C00}},
+      // SDMA0 4.4.2 instance 0 (needs-calibration).
+      {rocjitsu::IpHardwareId::Sdma0, 0, 4, 4, 2,
+       {0x00001260, 0x00012540, 0x0040A800}},
+  };
+
+  ASSERT_EQ(blocks.size(), contract.size())
+      << "gfx942 profile publishes a different set of blocks than this contract names";
+  for (std::size_t i = 0; i < contract.size(); ++i) {
+    const rocjitsu::IpBlock &block = blocks[i];
+    const Expected &want = contract[i];
+    EXPECT_EQ(block.hardware_id, want.id) << "block " << i;
+    EXPECT_EQ(block.instance, want.instance) << "block " << i;
+    EXPECT_EQ(block.major, want.major) << "block " << i;
+    EXPECT_EQ(block.minor, want.minor) << "block " << i;
+    EXPECT_EQ(block.revision, want.revision) << "block " << i;
+    EXPECT_EQ(block.register_bases, want.bases)
+        << "block " << i << ": a changed base resolves this block's registers elsewhere";
+  }
+}
+
+// The gfx950 (MI355X, CDNA4) profile must produce a table the amdgpu/KFD
+// driver will accept and must advertise the IP blocks at the versions that
+// route correctly into the driver's switch tables.
+//
+// Base addresses are derived from aldebaran-family offsets; they need
+// calibration from real gfx950 hardware sysfs data.
+TEST(IpDiscoveryProfile, Gfx950ProducesAValidTable) {
+  const rocjitsu::IpDiscoverySpec spec = rocjitsu::gfx950_discovery_spec();
+  const std::vector<std::byte> table = build(spec);
+  EXPECT_TRUE(rocjitsu::validate_ip_discovery_table(table).valid);
+}
+
+TEST(IpDiscoveryProfile, Gfx950HasAGcBlock) {
+  const rocjitsu::IpDiscoverySpec spec = rocjitsu::gfx950_discovery_spec();
+  bool has_gc = false;
+  for (const rocjitsu::IpBlock &block : spec.blocks) {
+    if (block.hardware_id == rocjitsu::IpHardwareId::Gc) {
+      has_gc = true;
+      EXPECT_EQ(block.major, 9u);
+      EXPECT_EQ(block.minor, 5u);
+      EXPECT_EQ(block.revision, 0u);
+    }
+  }
+  EXPECT_TRUE(has_gc) << "gfx950 profile must include at least one GC block";
+}
+
+TEST(IpDiscoveryProfile, Gfx950DefaultsToOneGraphicsInstance) {
+  const rocjitsu::IpDiscoverySpec spec = rocjitsu::gfx950_discovery_spec();
+  int graphics = 0;
+  for (const rocjitsu::IpBlock &block : spec.blocks) {
+    if (block.hardware_id == rocjitsu::IpHardwareId::Gc) {
+      ++graphics;
+    }
+  }
+  EXPECT_EQ(graphics, 1);
+}
+
+TEST(IpDiscoveryProfile, Gfx950AdvertisesTheRequestedGraphicsInstances) {
+  const rocjitsu::IpDiscoverySpec spec =
+      rocjitsu::gfx950_discovery_spec({.graphics_instances = 2});
+  int graphics = 0;
+  for (const rocjitsu::IpBlock &block : spec.blocks) {
+    if (block.hardware_id == rocjitsu::IpHardwareId::Gc) {
+      ++graphics;
+    }
+  }
+  EXPECT_EQ(graphics, 2);
+  EXPECT_TRUE(rocjitsu::validate_ip_discovery_table(build(spec)).valid);
+}
+
+// The contract test for gfx950.
+// Bases derived from aldebaran-family offsets; needs calibration.
+TEST(IpDiscoveryProfile, Gfx950BlockListMatchesContract) {
+  const std::vector<rocjitsu::IpBlock> &blocks = rocjitsu::gfx950_discovery_spec().blocks;
+
+  struct Expected {
+    rocjitsu::IpHardwareId id;
+    uint8_t instance;
+    uint16_t major;
+    uint16_t minor;
+    uint16_t revision;
+    std::vector<uint64_t> bases;
+  };
+  const std::vector<Expected> contract = {
+      // GC 9.5.0: CDNA4 graphics compute (needs-calibration).
+      {rocjitsu::IpHardwareId::Gc, 0, 9, 5, 0,
+       {0x00002000, 0x0000A000, 0x02402C00}},
+      // MP0 13.0 (needs-calibration).
+      {rocjitsu::IpHardwareId::Mp0, 0, 13, 0, 0,
+       {0x00016000, 0x00DC0000, 0x00E00000, 0x00E40000, 0x0243FC00}},
+      // MP1 13.0 (needs-calibration).
+      {rocjitsu::IpHardwareId::Mp1, 0, 13, 0, 0,
+       {0x00016000, 0x00DC0000, 0x00E00000, 0x00E40000, 0x0243FC00}},
+      // OSSSYS 4.4 (needs-calibration).
+      {rocjitsu::IpHardwareId::OssSys, 0, 4, 4, 0,
+       {0x000010A0, 0x0240A000}},
+      // NBIF 7.9 (needs-calibration).
+      {rocjitsu::IpHardwareId::Nbif, 0, 7, 9, 0,
+       {0x00000000, 0x00000014, 0x00000D20, 0x00010400, 0x0241B000, 0x04040000}},
+      // HDP 6.2 (needs-calibration).
+      {rocjitsu::IpHardwareId::Hdp, 0, 6, 2, 0,
+       {0x00000F20, 0x0240A400}},
+      // MMHUB 1.8 (needs-calibration).
+      {rocjitsu::IpHardwareId::MmHub, 0, 1, 8, 0,
+       {0x0001A000, 0x02408800}},
+      // ATHUB 1.8 (needs-calibration).
+      {rocjitsu::IpHardwareId::AtHub, 0, 1, 8, 0,
+       {0x00000C20, 0x02408C00}},
+      // SDMA0 5.2 instance 0 (needs-calibration).
+      {rocjitsu::IpHardwareId::Sdma0, 0, 5, 2, 0,
+       {0x00001260, 0x00012540, 0x0040A800}},
+  };
+
+  ASSERT_EQ(blocks.size(), contract.size())
+      << "gfx950 profile publishes a different set of blocks than this contract names";
+  for (std::size_t i = 0; i < contract.size(); ++i) {
+    const rocjitsu::IpBlock &block = blocks[i];
+    const Expected &want = contract[i];
+    EXPECT_EQ(block.hardware_id, want.id) << "block " << i;
+    EXPECT_EQ(block.instance, want.instance) << "block " << i;
+    EXPECT_EQ(block.major, want.major) << "block " << i;
+    EXPECT_EQ(block.minor, want.minor) << "block " << i;
+    EXPECT_EQ(block.revision, want.revision) << "block " << i;
+    EXPECT_EQ(block.register_bases, want.bases)
+        << "block " << i << ": a changed base resolves this block's registers elsewhere";
+  }
+}
+
 } // namespace

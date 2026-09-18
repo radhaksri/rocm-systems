@@ -38,25 +38,39 @@ constexpr uint64_t kDefaultVramApertureBytes = 256 * 1024 * 1024;
 /// @brief KFD target version of the one part a discovery profile exists for.
 constexpr uint32_t kGfx1250TargetVersion = 120500;
 
+/// @brief KFD target versions for the CDNA3/CDNA4 parts.
+constexpr uint32_t kGfx942TargetVersion = 90402;
+constexpr uint32_t kGfx950TargetVersion = 90500;
+
 /// @brief Choose the IP blocks to describe for @p device.
 ///
-/// @details gfx1250 is the only part modelled well enough to publish. Any other
-/// target, including one left unset, gets no blocks: publishing gfx1250's table
-/// for a configuration that models a different part would have the guest driver
-/// bind support for hardware the rest of the simulation is not, which fails
-/// later and further away than refusing here. An empty profile makes the device
-/// refuse to become usable, and says why.
+/// @details Known parts and their profiles:
+///   - gfx1250 (MI455X, CDNA5): full profile, transcribed from hardware.
+///   - gfx942  (MI300X / MI325X, CDNA3): profile from aldebaran offsets;
+///             base addresses need calibration from hardware sysfs.
+///   - gfx950  (MI355X, CDNA4): profile from aldebaran offsets; base addresses
+///             need calibration from hardware sysfs.
+/// Any other target gets no blocks: publishing the wrong arch's table would
+/// have the guest driver bind support for hardware the rest of the simulation
+/// is not, which fails later and further away than refusing here.
 /// @param[in] device The configured device.
 /// @returns The blocks to describe, empty if this part has no profile.
 [[nodiscard]] IpDiscoverySpec discovery_spec_for(const config::KfdDeviceConfig &device) {
-  if (device.gfx_target_version != kGfx1250TargetVersion) {
-    util::Logger::warn(std::format(
-        "gfx target {} has no IP discovery profile, so this device cannot describe itself to a "
-        "guest driver; only gfx{} is modelled",
-        device.gfx_target_version, kGfx1250TargetVersion));
-    return {};
+  if (device.gfx_target_version == kGfx1250TargetVersion) {
+    return gfx1250_discovery_spec();
   }
-  return gfx1250_discovery_spec();
+  if (device.gfx_target_version == kGfx942TargetVersion) {
+    return gfx942_discovery_spec();
+  }
+  if (device.gfx_target_version == kGfx950TargetVersion) {
+    return gfx950_discovery_spec();
+  }
+  util::Logger::warn(std::format(
+      "gfx target {} has no IP discovery profile, so this device cannot describe itself to a "
+      "guest driver; only gfx{}, gfx{}, and gfx{} are modelled",
+      device.gfx_target_version, kGfx1250TargetVersion, kGfx942TargetVersion,
+      kGfx950TargetVersion));
+  return {};
 }
 
 } // namespace

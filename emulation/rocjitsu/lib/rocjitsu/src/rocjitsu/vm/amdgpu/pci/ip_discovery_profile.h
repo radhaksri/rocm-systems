@@ -48,4 +48,34 @@ struct GpuDiscoveryTopology {
 /// @returns The spec to serialize with @ref build_ip_discovery_table.
 [[nodiscard]] IpDiscoverySpec gfx1250_discovery_spec(const GpuDiscoveryTopology &topology = {});
 
+/// @brief The blocks a simulated gfx942 (MI300X / MI325X, GC 9.4.3) reports.
+///
+/// @details gfx942 is the Aqua Vanjaram CDNA3 part. Its IP discovery table is
+/// generated dynamically by the hardware; the base addresses here are
+/// transcribed from the aldebaran-family IP offset headers (GC 9.4.2,
+/// `aldebaran_ip_offset.h`) which are the nearest upstream-published static
+/// addresses for this IP family. They should be calibrated against a real
+/// gfx942 part's `/sys/class/drm/card*/device/ip_discovery/die/0/…/base_addr`
+/// output when that hardware is available.
+///
+/// Unlike gfx1250, gfx942 has up to eight XCDs (graphics instances), each
+/// mapped to its own GC block entry in the IP discovery table. Advertising all
+/// eight pulls in XCP partition management and multi-aid handling; start with
+/// one and raise through @p topology as each consuming block is implemented.
+///
+/// @param[in] topology How much of the part to advertise.
+/// @returns The spec to serialize with @ref build_ip_discovery_table.
+[[nodiscard]] IpDiscoverySpec gfx942_discovery_spec(const GpuDiscoveryTopology &topology = {});
+
+/// @brief The blocks a simulated gfx950 (MI355X, CDNA4) reports.
+///
+/// @details gfx950 is the CDNA4 part. IP base addresses here are derived from
+/// the aldebaran-family (GC 9.4.2) offsets extended to the gfx950 IP versions
+/// (GC 9.5.0). They must be calibrated against a real gfx950 part once
+/// available.
+///
+/// @param[in] topology How much of the part to advertise.
+/// @returns The spec to serialize with @ref build_ip_discovery_table.
+[[nodiscard]] IpDiscoverySpec gfx950_discovery_spec(const GpuDiscoveryTopology &topology = {});
+
 } // namespace rocjitsu
