@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 /// @file ip_discovery_profile.h
-/// @brief The blocks a simulated gfx1250 reports to a guest driver.
+/// @brief The IP blocks each simulated GPU generation reports to a guest driver.
 ///
 /// @details One place decides what the device says it contains, because two
 /// places would eventually disagree: the device publishes this table into its
@@ -72,7 +72,7 @@ struct GpuDiscoveryTopology {
 ///
 /// @param[in] topology How much of the part to advertise.
 /// @returns The spec to serialize with @ref build_ip_discovery_table.
-[[nodiscard]] IpDiscoverySpec gfx942_discovery_spec(const GpuDiscoveryTopology &topology = {});
+[[nodiscard]] IpDiscoverySpec gfx942_discovery_spec(const GpuDiscoveryTopology &topology);
 
 /// @brief The blocks a simulated gfx950 (MI355X, CDNA4) reports.
 ///
@@ -83,6 +83,6 @@ struct GpuDiscoveryTopology {
 ///
 /// @param[in] topology How much of the part to advertise.
 /// @returns The spec to serialize with @ref build_ip_discovery_table.
-[[nodiscard]] IpDiscoverySpec gfx950_discovery_spec(const GpuDiscoveryTopology &topology = {});
+[[nodiscard]] IpDiscoverySpec gfx950_discovery_spec(const GpuDiscoveryTopology &topology);
 
 } // namespace rocjitsu

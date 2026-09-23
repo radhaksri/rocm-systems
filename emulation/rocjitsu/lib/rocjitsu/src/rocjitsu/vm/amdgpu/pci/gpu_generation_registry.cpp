@@ -12,6 +12,12 @@ namespace {
 /// @brief KFD target version gfx1250 reports.
 constexpr uint32_t kGfx1250TargetVersions[] = {120500};
 
+/// @brief KFD target versions for gfx942 (MI300X / MI325X, CDNA3).
+constexpr uint32_t kGfx942TargetVersions[] = {90402};
+
+/// @brief KFD target versions for gfx950 (MI355X, CDNA4).
+constexpr uint32_t kGfx950TargetVersions[] = {90500};
+
 /// @details One row per generation this image can present. Adding a part is a
 /// row plus its profile, which is the whole point of the indirection: nothing
 /// here needs editing anywhere else to answer for a new target.
@@ -29,6 +35,40 @@ constexpr GpuGenerationDescriptor kGenerations[] = {
              .max_waves_per_simd = 16,
              .max_scratch_slots_per_cu = 32,
              .lds_size_kb = 320,
+         }},
+    // gfx942: Aqua Vanjaram / MI300X / MI325X (CDNA3).
+    // Topology from gfx942_cdna3_kmd.json: 4 SE, 1 SA/SE, 10 CU/SA.
+    // graphics_instances defaults to 1 (single XCD bring-up).
+    {.id = "gfx942",
+     .gfx_target_versions = kGfx942TargetVersions,
+     .discovery_factory = &gfx942_discovery_spec,
+     .topology_defaults =
+         {
+             .graphics_instances = 1,
+             .shader_engines = 4,
+             .shader_arrays_per_engine = 1,
+             .compute_units_per_shader_array = 10,
+             .wavefront_size = 64,
+             .max_waves_per_simd = 8,
+             .max_scratch_slots_per_cu = 32,
+             .lds_size_kb = 64,
+         }},
+    // gfx950: MI355X (CDNA4).
+    // Topology from gfx950_mi355x_kmd.json: 4 SE, 1 SA/SE, 9 CU/SA.
+    // graphics_instances defaults to 1 (single XCD bring-up).
+    {.id = "gfx950",
+     .gfx_target_versions = kGfx950TargetVersions,
+     .discovery_factory = &gfx950_discovery_spec,
+     .topology_defaults =
+         {
+             .graphics_instances = 1,
+             .shader_engines = 4,
+             .shader_arrays_per_engine = 1,
+             .compute_units_per_shader_array = 9,
+             .wavefront_size = 64,
+             .max_waves_per_simd = 8,
+             .max_scratch_slots_per_cu = 32,
+             .lds_size_kb = 160,
          }},
 };
 
