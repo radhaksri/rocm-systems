@@ -83,8 +83,7 @@ using make_offset_index_sequence =
 
 template <size_t StartN, size_t EndN>
 using make_index_sequence_range =
-    typename offset_index_sequence<std::make_index_sequence<(EndN - StartN)>,
-                                   StartN>::type;
+    offset_index_sequence<std::make_index_sequence<(EndN - StartN)>, StartN>::type;
 
 template <typename Tp>
 struct generate
@@ -96,7 +95,7 @@ struct generate
     {
         if constexpr(concepts::is_unique_pointer<Tp>::value)
         {
-            using value_type = typename type::element_type;
+            using value_type = type::element_type;
 
             if constexpr(use_placement_new_when_generating_unique_ptr<value_type>::value)
             {
@@ -245,9 +244,6 @@ extern template std::unordered_set<std::int64_t>
 parse_numeric_range<std::int64_t, std::unordered_set<std::int64_t>>(std::string,
                                                                     const std::string&,
                                                                     long);
-
-void
-trim_str(std::string& str);
 
 }  // namespace utility
 }  // namespace rocprofsys
